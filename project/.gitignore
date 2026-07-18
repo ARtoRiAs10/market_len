@@ -1,0 +1,39 @@
+# Dependency directories
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+web/.next/
+web/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Env files — never commit real secrets
+web/.env
+api/.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+
+# Build outputs
+web/.next/
+web/out/
+
+# Misc
+.DS_Store
+*.log
+.vercel
+.turbo
+
+README.md

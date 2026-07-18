@@ -1,0 +1,535 @@
+// ============================================================================
+// MarketLens — Prisma Schema
+// Database: Neon (Serverless Postgres)
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Auth (NextAuth.js compatible models)
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String? // null for OAuth-only users
+  role          UserRole  @default(USER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  subscription Subscription?
+  strategyRuns StrategyRun[]
+  etlJobs      EtlJob[]
+  watchlist    WatchlistItem[]
+  auditLogs    AuditLog[]
+  apiKeys      ApiKey[]
+  ScoreAlert   ScoreAlert[]
+  AnalystNote  AnalystNote[]
+  TeamMember   TeamMember[]
+  TotpSecret   TotpSecret?
+
+  @@index([email])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  keyHash    String    @unique
+  keyPrefix  String // first 8 chars shown to user e.g. "mkl_live_a1b2..."
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Billing / Subscriptions (Stripe)
+// ----------------------------------------------------------------------------
+
+enum PlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  UNPAID
+  NONE
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  plan                 PlanTier           @default(FREE)
+  status               SubscriptionStatus @default(NONE)
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stripeCustomerId])
+}
+
+model PlanLimit {
+  id                  String   @id @default(cuid())
+  plan                PlanTier @unique
+  maxWatchlistItems   Int
+  maxStrategyRunsDay  Int
+  maxEtlJobsDay       Int
+  maxCompaniesTracked Int
+  historicalQuarters  Int // how many quarters back the plan can access
+  apiAccess           Boolean  @default(false)
+}
+
+// ----------------------------------------------------------------------------
+// Market Data — Companies & Financials
+// ----------------------------------------------------------------------------
+
+model Company {
+  id            String   @id @default(cuid())
+  ticker        String   @unique
+  name          String
+  sector        String?
+  industry      String?
+  exchange      String?
+  country       String?
+  currency      String   @default("USD")
+  website       String?
+  description   String?  @db.Text
+  logoUrl       String?
+  marketCap     Decimal? @db.Decimal(20, 2)
+  employeeCount Int?
+
+  source    DataSource @default(MOCK)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  quarters      FinancialQuarter[]
+  strategyRuns  StrategyRun[]
+  watchlistedBy WatchlistItem[]
+  etlJobs       EtlJob[]
+  EarningsDate  EarningsDate[]
+  ScoreAlert    ScoreAlert[]
+  AnalystNote   AnalystNote[]
+
+  @@index([ticker])
+  @@index([sector])
+}
+
+enum DataSource {
+  MOCK
+  ALPHA_VANTAGE
+  FMP
+  MANUAL
+}
+
+// One row per company per fiscal quarter — the core fact table used by ETL + strategies
+model FinancialQuarter {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fiscalYear    Int
+  fiscalQuarter Int // 1-4
+  periodEndDate DateTime
+  reportedAt    DateTime?
+
+  // --- Income statement ---
+  revenue           Decimal? @db.Decimal(20, 2)
+  costOfRevenue     Decimal? @db.Decimal(20, 2)
+  grossProfit       Decimal? @db.Decimal(20, 2)
+  operatingExpense  Decimal? @db.Decimal(20, 2)
+  operatingIncome   Decimal? @db.Decimal(20, 2)
+  netIncome         Decimal? @db.Decimal(20, 2)
+  ebitda            Decimal? @db.Decimal(20, 2)
+  eps               Decimal? @db.Decimal(10, 4)
+  sharesOutstanding Decimal? @db.Decimal(20, 2)
+
+  // --- Balance sheet ---
+  totalAssets        Decimal? @db.Decimal(20, 2)
+  totalLiabilities   Decimal? @db.Decimal(20, 2)
+  totalEquity        Decimal? @db.Decimal(20, 2)
+  currentAssets      Decimal? @db.Decimal(20, 2)
+  currentLiabilities Decimal? @db.Decimal(20, 2)
+  cash               Decimal? @db.Decimal(20, 2)
+  totalDebt          Decimal? @db.Decimal(20, 2)
+  longTermDebt       Decimal? @db.Decimal(20, 2)
+  inventory          Decimal? @db.Decimal(20, 2)
+  receivables        Decimal? @db.Decimal(20, 2)
+
+  // --- Cash flow ---
+  operatingCashFlow Decimal? @db.Decimal(20, 2)
+  capex             Decimal? @db.Decimal(20, 2)
+  freeCashFlow      Decimal? @db.Decimal(20, 2)
+  dividendsPaid     Decimal? @db.Decimal(20, 2)
+
+  // --- Market data at period end ---
+  closePrice Decimal? @db.Decimal(14, 4)
+  volumeAvg  Decimal? @db.Decimal(20, 2)
+
+  // --- Derived / precomputed ratios (filled by ETL "transform" step) ---
+  grossMargin     Decimal? @db.Decimal(10, 6)
+  operatingMargin Decimal? @db.Decimal(10, 6)
+  netMargin       Decimal? @db.Decimal(10, 6)
+  roa             Decimal? @db.Decimal(10, 6)
+  roe             Decimal? @db.Decimal(10, 6)
+  currentRatio    Decimal? @db.Decimal(10, 6)
+  quickRatio      Decimal? @db.Decimal(10, 6)
+  debtToEquity    Decimal? @db.Decimal(10, 6)
+  assetTurnover   Decimal? @db.Decimal(10, 6)
+  peRatio         Decimal? @db.Decimal(10, 6)
+  pbRatio         Decimal? @db.Decimal(10, 6)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, fiscalYear, fiscalQuarter])
+  @@index([companyId])
+  @@index([periodEndDate])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
+}
+
+// ----------------------------------------------------------------------------
+// Strategy Engine
+// ----------------------------------------------------------------------------
+
+// A registry row mirrors the strategy plugin defined in code (lib/strategies/*),
+// allowing strategies to be listed/enabled/disabled via DB without redeploys.
+model Strategy {
+  id          String  @id @default(cuid())
+  slug        String  @unique // matches code registry key, e.g. "piotroski-fscore"
+  name        String
+  category    String // e.g. "Fundamental Quality", "Valuation", "Momentum"
+  summary     String  @db.Text
+  methodology String  @db.Text // longer description of steps, shown on the strategy page
+  isPremium   Boolean @default(false)
+  isActive    Boolean @default(true)
+  icon        String? // lucide icon name
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs StrategyRun[]
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model StrategyRun {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategyId String
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  parameters   Json // user-chosen parameters for this run (weights, thresholds, lookback, etc.)
+  status       RunStatus @default(PENDING)
+  result       Json? // { score, verdict, criteria: [{key,label,pass,value,threshold}], series: [...] }
+  errorMessage String?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  sharedRun SharedRun?
+
+  @@index([userId])
+  @@index([strategyId])
+  @@index([companyId])
+}
+
+// ----------------------------------------------------------------------------
+// ETL Pipeline
+// ----------------------------------------------------------------------------
+
+enum EtlStage {
+  EXTRACT
+  TRANSFORM
+  VALIDATE
+  LOAD
+  DONE
+}
+
+enum EtlStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model EtlJob {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  sourceType  DataSource @default(MOCK)
+  inputConfig Json // e.g. { ticker, quarters, sourceType, sourceParams }
+  stage       EtlStage   @default(EXTRACT)
+  status      EtlStatus  @default(QUEUED)
+
+  stepLogs      Json? // [{ step: "extract", startedAt, finishedAt, rowsIn, rowsOut, message }]
+  resultSummary Json? // final summary stats once LOAD completes
+  errorMessage  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Audit Log
+// ----------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String // e.g. "auth.login", "billing.subscribe", "strategy.run"
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ── Sector Index Watchlists (pre-built lists) ─────────────────────────────────
+model IndexWatchlist {
+  id          String   @id @default(cuid())
+  name        String   @unique // "S&P 500 Technology", "NIFTY 50", etc.
+  description String?
+  region      String?
+  tickers     Json // string[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Earnings Calendar override (optional manual dates) ────────────────────────
+model EarningsDate {
+  id            String    @id @default(cuid())
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fiscalYear    Int
+  fiscalQuarter Int
+  reportedAt    DateTime?
+  estimatedAt   DateTime?
+  confirmed     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  @@unique([companyId, fiscalYear, fiscalQuarter])
+  @@index([companyId])
+}
+
+// ── Score Alerts ───────────────────────────────────────────────────────────────
+model ScoreAlert {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  strategySlug    String
+  condition       AlertCondition
+  threshold       Float?
+  changeMagnitude Float?
+  notifyEmail     Boolean        @default(true)
+  active          Boolean        @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime       @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+enum AlertCondition {
+  SCORE_ABOVE
+  SCORE_BELOW
+  SCORE_CHANGE
+  VERDICT_CHANGE
+}
+
+// ── Analyst Notes ─────────────────────────────────────────────────────────────
+model AnalystNote {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fiscalYear    Int?
+  fiscalQuarter Int?
+  content       String   @db.Text
+  pinned        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+// ── Shared Run Links ──────────────────────────────────────────────────────────
+model SharedRun {
+  id        String      @id @default(cuid())
+  runId     String      @unique
+  run       StrategyRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdBy String
+  viewCount Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  @@index([runId])
+}
+
+// ── Team Workspaces ───────────────────────────────────────────────────────────
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  ownerId   String
+  plan      PlanTier     @default(FREE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  members   TeamMember[]
+
+  @@index([ownerId])
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+model TeamMember {
+  id        String    @id @default(cuid())
+  teamId    String
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      TeamRole  @default(ANALYST)
+  invitedAt DateTime  @default(now())
+  joinedAt  DateTime?
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model TeamInvite {
+  id        String   @id @default(cuid())
+  teamId    String
+  email     String
+  role      TeamRole @default(ANALYST)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([teamId])
+  @@index([token])
+}
+
+// ── TOTP / 2FA ────────────────────────────────────────────────────────────────
+model TotpSecret {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String // encrypted TOTP secret
+  verified    Boolean  @default(false)
+  backupCodes Json // hashed backup codes
+  createdAt   DateTime @default(now())
+}
