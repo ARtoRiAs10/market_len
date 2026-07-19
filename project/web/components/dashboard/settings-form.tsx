@@ -52,8 +52,17 @@ export function SettingsForm({ user }: { user: UserData }) {
   }
 
   async function disableTotp() {
-    const res = await fetch("/api/auth/totp", { method: "DELETE" });
+    // Disabling 2FA now requires re-confirming the account password server-side.
+    const password = window.prompt("Confirm your password to disable 2FA:");
+    if (!password) return;
+    const res = await fetch("/api/auth/totp", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const d = await res.json().catch(() => ({}));
     if (res.ok) { setHas2FA(false); setTotpSetup(null); toast({ title: "2FA disabled" }); }
+    else { toast({ title: "Could not disable 2FA", description: d.error, variant: "destructive" as any }); }
   }
 
   return (

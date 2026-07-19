@@ -23,16 +23,23 @@ const OPENROUTER_MODELS = [
   { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B (Meta)" },
   { id: "deepseek/deepseek-r1",           label: "DeepSeek R1" },
   { id: "qwen/qwen-2.5-72b-instruct",    label: "Qwen 2.5 72B" },
+  { id:"nvidia/nemotron-3-super-120b-a12b:free" , label:"nvidia/nemotron"},
+  { id: "openrouter/free",                label: "openrouter/free"},
 ];
 
 export { OPENROUTER_MODELS };
 
+// Only allow models from the published list — otherwise any authenticated
+// user could pass an arbitrary model string to the upstream (paid) API,
+// which is both a cost-control and an abuse-prevention concern.
+const ALLOWED_MODEL_IDS = OPENROUTER_MODELS.map((m) => m.id) as [string, ...string[]];
+
 const schema = z.object({
-  ticker: z.string(),
-  strategySlug: z.string(),
+  ticker: z.string().min(1).max(10),
+  strategySlug: z.string().max(80),
   question: z.string().max(600),
   parameters: z.record(z.union([z.number(), z.string(), z.boolean()])).default({}),
-  model: z.string().default("anthropic/claude-opus-4-6"),
+  model: z.enum(ALLOWED_MODEL_IDS).default("anthropic/claude-opus-4-6"),
 });
 
 export async function GET() {

@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AddCompanyForm } from "@/components/dashboard/add-company-form";
@@ -8,7 +9,10 @@ import { getSeedCompanyList } from "@/lib/mock-data";
 
 export default async function CompaniesPage() {
   const session = await getServerSession(authOptions);
-  const userId = session!.user.id;
+  // Don't rely solely on middleware to guarantee a session here — JWTs can
+  // expire mid-request. Fail safe with a redirect instead of a 500 crash.
+  if (!session?.user?.id) redirect("/login?callbackUrl=/dashboard/companies");
+  const userId = session.user.id;
 
   const watchlist = await prisma.watchlistItem.findMany({
     where: { userId },

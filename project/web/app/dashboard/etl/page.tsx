@@ -1,11 +1,13 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EtlWorkbench } from "@/components/etl/etl-workbench";
 
 export default async function EtlPage() {
   const session = await getServerSession(authOptions);
-  const userId = session!.user.id;
+  if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
 
   const [watchlist, jobs] = await Promise.all([
     prisma.watchlistItem.findMany({

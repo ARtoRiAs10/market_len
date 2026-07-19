@@ -31,7 +31,7 @@ export function ApiKeysManager({ initialKeys, plan }: { initialKeys: ApiKey[]; p
             <p className="text-muted-foreground"># Example</p>
             <p>curl -X POST https://yourapp.com/api/v1/strategies/run \</p>
             <p>  -H "X-API-Key: mkl_live_..." \</p>
-            <p>  -d '{"slug":"piotroski-fscore-dupont","ticker":"NEXG"}'</p>
+            <p>{`  -d '{"slug":"piotroski-fscore-dupont","ticker":"NEXG"}'`}</p>
           </div>
           <Button onClick={() => window.location.href = "/dashboard/billing"}>Upgrade to Pro</Button>
         </CardContent>

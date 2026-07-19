@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserPlan } from "@/lib/plan-limits";
@@ -6,10 +7,11 @@ import { TeamWorkspace } from "@/components/team/team-workspace";
 
 export default async function TeamPage() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
   const [plan, memberships] = await Promise.all([
-    getUserPlan(session!.user.id),
+    getUserPlan(session.user.id),
     prisma.teamMember.findMany({
-      where: { userId: session!.user.id, joinedAt: { not: null } },
+      where: { userId: session.user.id, joinedAt: { not: null } },
       include: {
         team: {
           include: {
@@ -41,7 +43,7 @@ export default async function TeamPage() {
             joinedAt: mem.joinedAt?.toISOString() ?? null,
           })),
         }))}
-        currentUserId={session!.user.id}
+        currentUserId={session.user.id}
       />
     </div>
   );

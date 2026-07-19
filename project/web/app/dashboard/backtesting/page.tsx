@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { listStrategies } from "@/lib/strategies/registry";
@@ -6,8 +7,9 @@ import { BacktestWorkbench } from "@/components/backtesting/backtest-workbench";
 
 export default async function BacktestingPage() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
   const watchlist = await prisma.watchlistItem.findMany({
-    where: { userId: session!.user.id },
+    where: { userId: session.user.id },
     include: { company: true },
     orderBy: { company: { ticker: "asc" } },
   });

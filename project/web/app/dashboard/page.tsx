@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +11,8 @@ import { checkStrategyRunLimit, checkEtlJobLimit, getUserPlan, PLAN_LIMITS } fro
 
 export default async function DashboardOverviewPage() {
   const session = await getServerSession(authOptions);
-  const userId = session!.user.id;
+  if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
 
   const [companyCount, recentRuns, recentEtl, plan, runLimit, etlLimit] = await Promise.all([
     prisma.watchlistItem.count({ where: { userId } }),

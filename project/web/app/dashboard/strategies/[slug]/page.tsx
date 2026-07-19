@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -17,7 +17,8 @@ export default async function StrategyDetailPage({
   if (!strategy) notFound();
 
   const session = await getServerSession(authOptions);
-  const userId = session!.user.id;
+  if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
 
   const watchlist = await prisma.watchlistItem.findMany({
     where: { userId },

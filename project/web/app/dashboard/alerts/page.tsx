@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { listStrategies } from "@/lib/strategies/registry";
@@ -6,9 +7,10 @@ import { AlertsManager } from "@/components/alerts/alerts-manager";
 
 export default async function AlertsPage() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
   const [alerts, watchlist, strategies] = await Promise.all([
-    prisma.scoreAlert.findMany({ where: { userId: session!.user.id, active: true }, include: { company: true }, orderBy: { createdAt: "desc" } }),
-    prisma.watchlistItem.findMany({ where: { userId: session!.user.id }, include: { company: true }, orderBy: { company: { ticker: "asc" } } }),
+    prisma.scoreAlert.findMany({ where: { userId: session.user.id, active: true }, include: { company: true }, orderBy: { createdAt: "desc" } }),
+    prisma.watchlistItem.findMany({ where: { userId: session.user.id }, include: { company: true }, orderBy: { company: { ticker: "asc" } } }),
     Promise.resolve(listStrategies()),
   ]);
   return (

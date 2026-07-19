@@ -93,12 +93,22 @@ export async function POST(req: NextRequest, { params }: { params: { jobId: stri
     return NextResponse.json({ error: "Invalid callback payload" }, { status: 400 });
   }
 
-  const expectedSecret = crypto
-    .createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "dev-secret")
-    .update(job.id)
-    .digest("hex");
+  const hmacKey = process.env.NEXTAUTH_SECRET;
+  if (!hmacKey) {
+    // Never fall back to a hardcoded key: the callback URL (with jobId) is
+    // not itself secret, so a predictable "dev-secret" fallback would let
+    // anyone forge ETL callbacks and inject arbitrary financial data.
+    console.error("[etl callback] NEXTAUTH_SECRET is not set; refusing to verify callback.");
+    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+  }
 
-  if (parsed.data.secret !== expectedSecret) {
+  const expectedSecret = crypto.createHmac("sha256", hmacKey).update(job.id).digest("hex");
+  const provided = Buffer.from(parsed.data.secret, "hex");
+  const expected = Buffer.from(expectedSecret, "hex");
+  const validSignature =
+    provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+
+  if (!validSignature) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

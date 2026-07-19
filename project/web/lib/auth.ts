@@ -5,6 +5,8 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
+import { verifyTotpForUser, userHasTotpEnabled } from "@/lib/totp";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
@@ -19,13 +21,40 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        totpCode: { label: "2FA code", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) throw new Error("Email and password required");
-        const user = await prisma.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
+        const email = credentials.email.toLowerCase().trim();
+
+        // Rate-limit login attempts per-account AND per-IP so a credential-
+        // stuffing / brute-force script can't hammer the password check.
+        // (bcrypt.compare is slow, but that alone isn't a substitute for a
+        // hard cap on attempts — OWASP A07: Identification & Authentication
+        // Failures.)
+        const forwardedFor = req?.headers?.["x-forwarded-for"];
+        const ip = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor)?.split(",")[0]?.trim() ?? "unknown";
+        const byAccount = rateLimit(`login:acct:${email}`, { limit: 8, windowMs: 5 * 60_000 });
+        const byIp = rateLimit(`login:ip:${ip}`, { limit: 20, windowMs: 5 * 60_000 });
+        if (!byAccount.success || !byIp.success) {
+          throw new Error("Too many login attempts. Please wait a few minutes and try again.");
+        }
+
+        const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.passwordHash) throw new Error("Invalid email or password");
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) throw new Error("Invalid email or password");
+
+        // Enforce TOTP 2FA if the user has it enabled. Previously the app
+        // let users set up and "activate" 2FA, but nothing at sign-in ever
+        // checked it — 2FA was decorative and could be silently bypassed
+        // with just the password.
+        if (await userHasTotpEnabled(prisma, user.id)) {
+          if (!credentials.totpCode) throw new Error("2FA_REQUIRED");
+          const totpOk = await verifyTotpForUser(prisma, user.id, credentials.totpCode);
+          if (!totpOk) throw new Error("Invalid 2FA code");
+        }
+
         return { id: user.id, email: user.email, name: user.name, image: user.image, role: user.role };
       },
     }),

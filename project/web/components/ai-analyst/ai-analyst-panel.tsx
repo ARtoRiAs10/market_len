@@ -57,7 +57,7 @@ export function AiAnalystPanel({ ticker, strategySlug, parameters, isPro }: Prop
     setQuestion("");
     setLoading(true);
 
-    // Try OpenRouter first, fall back to direct Anthropic route
+   
     const res = await fetch("/api/openrouter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

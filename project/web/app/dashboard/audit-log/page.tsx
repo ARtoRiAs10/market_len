@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,8 +15,9 @@ const ACTION_COLORS: Record<string, "positive" | "negative" | "amber" | "outline
 
 export default async function AuditLogPage() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/login");
   const logs = await prisma.auditLog.findMany({
-    where: { userId: session!.user.id },
+    where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
     take: 100,
   });

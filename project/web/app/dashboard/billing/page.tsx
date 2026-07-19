@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
@@ -12,7 +13,8 @@ function fmt(d: Date) {
 
 export default async function BillingPage() {
   const session = await getServerSession(authOptions);
-  const sub = await prisma.subscription.findUnique({ where: { userId: session!.user.id } });
+  if (!session?.user?.id) redirect("/login");
+  const sub = await prisma.subscription.findUnique({ where: { userId: session.user.id } });
   const plan = sub?.plan ?? "FREE";
   const limits = PLAN_LIMITS[plan];
 

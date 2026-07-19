@@ -7,8 +7,12 @@ import { getUserPlan } from "@/lib/plan-limits";
 import { z } from "zod";
 
 const schema = z.object({
-  ticker: z.string(),
-  strategySlug: z.string().optional(),
+  // Tickers are short alphanumeric symbols (optionally with . or -, e.g.
+  // BRK.B). Constraining this prevents header/response-splitting or
+  // filename-injection via the Content-Disposition header below, since the
+  // raw value would otherwise flow unsanitized into an HTTP header.
+  ticker: z.string().min(1).max(10).regex(/^[A-Za-z0-9.\-]+$/, "Invalid ticker format"),
+  strategySlug: z.string().max(80).optional(),
   format: z.enum(["csv", "json", "excel"]).default("csv"),
   parameters: z.record(z.union([z.number(), z.string(), z.boolean()])).default({}),
 });
