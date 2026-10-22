@@ -7,15 +7,38 @@
  *   - Admin user: admin@marketlens.dev / Admin1234  (PRO plan)
  *   - Demo user:  demo@marketlens.dev / Demo1234    (FREE plan)
  *   - 10 seed companies × 12 quarters each
- *   - 3 strategy registry rows
+ *   - Daily price bars for those companies + an SPY benchmark series
+ *   - Every strategy in the registry
  *   - 5 index watchlists
+ *   - A demo portfolio for the admin user
  *   - Sample alert + analyst note for admin
  */
 import { PrismaClient } from "@prisma/client";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { PrismaNeon } from "@prisma/adapter-neon";
 import bcrypt from "bcryptjs";
-import { getSeedCompanyList, generateMockCompanyProfile, generateMockQuarters } from "../lib/mock-data";
+import ws from "ws";
+import {
+  getSeedCompanyList,
+  generateMockCompanyProfile,
+  generateMockQuarters,
+  generateMockDailyBars,
+} from "../lib/mock-data";
 
-const prisma = new PrismaClient();
+// Neon's serverless driver needs a WebSocket implementation outside the
+// edge/browser runtime.
+if (typeof WebSocket === "undefined") {
+  neonConfig.webSocketConstructor = ws;
+}
+
+function createPrismaClient(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is not set");
+  const pool = new Pool({ connectionString });
+  return new PrismaClient({ adapter: new PrismaNeon(pool) });
+}
+
+const prisma = createPrismaClient();
 
 async function main() {
   console.log("🌱  Seeding MarketLens database…\n");
@@ -111,7 +134,25 @@ async function main() {
   }
   console.log(`  ✓ ${seedList.length} companies × 12 quarters (admin watching 5, demo watching 2)`);
 
-  // ── 4. Strategy registry ──────────────────────────────────────────────────
+  // ── 4. Daily price bars (portfolio + risk analytics) ─────────────────────
+  const priceTickers = [...seedList.map((c) => c.ticker), "SPY"];
+  const barRows = priceTickers.flatMap((ticker) =>
+    generateMockDailyBars(ticker, 500).map((b) => ({
+      ticker,
+      date: b.date,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+      adjClose: b.adjClose,
+      volume: b.volume,
+      source: "MOCK" as const,
+    }))
+  );
+  await prisma.priceBar.createMany({ data: barRows, skipDuplicates: true });
+  console.log(`  ✓ ${barRows.length} daily price bars (${priceTickers.length} tickers incl. SPY)`);
+
+  // ── 5. Strategy registry ──────────────────────────────────────────────────
   const strategies = [
     {
       slug: "piotroski-fscore-dupont",
@@ -137,11 +178,59 @@ async function main() {
       methodology: "8 indices: DSRI, GMI, AQI, SGI, DEPI, SGAI, LVGI, TATA. M>-2.22 signals possible manipulation.",
       icon: "Search", sortOrder: 3, isPremium: false,
     },
+    {
+      slug: "fama-french-five-factor",
+      name: "Fama–French 5-Factor Scorecard",
+      category: "Factor Models",
+      summary: "Value, profitability, investment, size and momentum legs combined into one cross-sectional score.",
+      methodology: "Each leg is scaled cross-sectionally and z-scored, then combined into the five-factor composite.",
+      icon: "Layers", sortOrder: 4, isPremium: false,
+    },
+    {
+      slug: "quality-minus-junk",
+      name: "Quality Minus Junk (QMJ)",
+      category: "Factor Models",
+      summary: "Profitability, growth, safety and payout composite minus the matching junk composite.",
+      methodology: "QMJ = z(profitability, growth, safety, payout) − z(low profitability, low payout).",
+      icon: "ShieldCheck", sortOrder: 5, isPremium: false,
+    },
+    {
+      slug: "magic-formula",
+      name: "The Magic Formula",
+      category: "Value & Momentum",
+      summary: "Greenblatt's combined rank of return on capital and earnings yield.",
+      methodology: "Rank by ROIC and by earnings yield, sum the ranks and buy the lowest combined rank.",
+      icon: "Wand2", sortOrder: 6, isPremium: false,
+    },
+    {
+      slug: "graham-defensive-investor",
+      name: "Graham Defensive Investor Checklist",
+      category: "Value & Momentum",
+      summary: "Benjamin Graham's seven defensive-investor criteria, scored 0–7.",
+      methodology: "Size, financial condition, earnings stability, dividend record, P/E, P/B and margin of safety.",
+      icon: "BookOpen", sortOrder: 7, isPremium: false,
+    },
+    {
+      slug: "momentum-12-1",
+      name: "12−1 Month Momentum",
+      category: "Value & Momentum",
+      summary: "Intermediate-horizon momentum with a short-term reversal filter and volatility scaling.",
+      methodology: "Formation-window return skipping the most recent period, scaled by realised volatility, with an earnings-quality check.",
+      icon: "TrendingUp", sortOrder: 8, isPremium: false,
+    },
+    {
+      slug: "dcf-valuation",
+      name: "Discounted Cash Flow (FCFF) Valuation",
+      category: "Valuation",
+      summary: "Five-year FCFF DCF with CAPM-based WACC and a Gordon terminal value.",
+      methodology: "FCFF = EBIT·(1−t) + D&A − CapEx − ΔNWC, discounted at WACC; score is the implied upside.",
+      icon: "Calculator", sortOrder: 9, isPremium: false,
+    },
   ];
   for (const s of strategies) {
     await prisma.strategy.upsert({ where: { slug: s.slug }, create: { ...s, isActive: true }, update: {} });
   }
-  console.log("  ✓ 3 strategies registered");
+  console.log("  ✓ 9 strategies registered");
 
   // ── 5. Index watchlists ───────────────────────────────────────────────────
   const indexLists = [
@@ -199,6 +288,32 @@ async function main() {
     }
   }
   console.log("  ✓ Sample score alert");
+
+  // ── 8. Demo portfolio for the admin user ─────────────────────────────────
+  const portfolioCount = await prisma.portfolio.count({ where: { userId: admin.id } });
+  if (portfolioCount === 0 && companyIds.length >= 5) {
+    const holdings = companyIds.slice(0, 5);
+    const shares = holdings.map((_, i) => 100 * (i + 1));
+    await prisma.portfolio.create({
+      data: {
+        userId: admin.id,
+        name: "Core Growth",
+        description: "Seeded portfolio used to demonstrate allocation, risk and attribution analytics.",
+        baseCurrency: "USD",
+        benchmarkTicker: "SPY",
+        cashBalance: 25000,
+        isDefault: true,
+        positions: {
+          create: holdings.map((h, i) => ({
+            ticker: h.ticker,
+            companyId: h.id,
+            shares: shares[i],
+          })),
+        },
+      },
+    });
+  }
+  console.log("  ✓ Demo portfolio (Core Growth)");
 
   console.log("\n✅  Seed complete!\n");
   console.log("  Admin:  admin@marketlens.dev  / Admin1234  (PRO plan)");

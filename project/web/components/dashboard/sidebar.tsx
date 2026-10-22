@@ -6,7 +6,7 @@ import {
   LineChart, LayoutDashboard, ClipboardCheck, Workflow,
   CreditCard, Settings, ChevronDown, ChevronsLeft, ChevronsRight,
   Star, Building2, ScanSearch, TrendingUp, BarChart3, CalendarDays,
-  Key, Bell, Users, Shield, FileText, List,
+  Key, Bell, Users, Shield, FileText, List, Wallet, BookOpen, Grid3x3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,9 @@ export function DashboardSidebar({ strategies, watchlist }: { strategies: Strate
             <N href="/dashboard/screener" icon={<ScanSearch />} label="Screener" c={false} active={pathname === "/dashboard/screener"} indent />
             <N href="/dashboard/backtesting" icon={<TrendingUp />} label="Backtesting" c={false} active={pathname === "/dashboard/backtesting"} indent />
             <N href="/dashboard/benchmarking" icon={<BarChart3 />} label="Benchmarking" c={false} active={pathname === "/dashboard/benchmarking"} indent />
+            <N href="/dashboard/factors" icon={<Grid3x3 />} label="Factor Exposure" c={false} active={pathname === "/dashboard/factors"} indent />
+            <N href="/dashboard/portfolios" icon={<Wallet />} label="Portfolios" c={false} active={pathname.startsWith("/dashboard/portfolios")} indent />
+            <N href="/dashboard/research" icon={<BookOpen />} label="Research Library" c={false} active={pathname === "/dashboard/research"} indent />
           </div>
         )}
 

@@ -86,6 +86,31 @@ export function BacktestWorkbench({ strategies, companies }: { strategies: Strat
                 </CardContent></Card>
               ))}
             </div>
+            {result.risk && (
+              <div className="grid gap-4 sm:grid-cols-4">
+                {[
+                  { label: "Annualised return", value: result.risk.annualisedReturn !== null ? `${(result.risk.annualisedReturn * 100).toFixed(1)}%` : "—" },
+                  { label: "Sharpe", value: result.risk.sharpe !== null ? result.risk.sharpe.toFixed(2) : "—" },
+                  { label: "Max drawdown", value: result.risk.maxDrawdown !== null ? `${(result.risk.maxDrawdown * 100).toFixed(1)}%` : "—", color: "text-signal-negative" },
+                  { label: "Deflated Sharpe prob.", value: result.risk.deflatedSharpeProb !== null ? `${(result.risk.deflatedSharpeProb * 100).toFixed(0)}%` : "—" },
+                ].map(m => (
+                  <Card key={m.label}><CardContent className="p-4">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{m.label}</p>
+                    <p className={cn("mt-1 font-mono text-lg font-semibold", m.color)}>{m.value}</p>
+                  </CardContent></Card>
+                ))}
+              </div>
+            )}
+            {result.warnings && result.warnings.length > 0 && (
+              <Card className="border-signal-amber/40 bg-signal-amber/5">
+                <CardContent className="p-4 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Backtest warnings</p>
+                  <ul className="mt-1 list-inside list-disc">
+                    {result.warnings.map((w: string) => <li key={w}>{w}</li>)}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader><CardTitle className="text-base">Portfolio vs Buy-and-Hold (base 100)</CardTitle><CardDescription>Following strategy signals vs always being invested.</CardDescription></CardHeader>
               <CardContent><div className="h-72">

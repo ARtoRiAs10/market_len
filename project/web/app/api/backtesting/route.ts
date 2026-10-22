@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getStrategyBySlug } from "@/lib/strategies/registry";
+import { runBacktest } from "@/lib/quant/backtest";
 import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
@@ -41,60 +42,81 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Need at least ${windowSize + 2} quarters. Have ${quarters.length}.` }, { status: 422 });
   }
 
-  // Walk-forward backtest: at each quarter, evaluate strategy on the previous `windowSize` quarters,
-  // record the signal, then measure price return over the NEXT quarter.
-  const signals: { label: string; score: number; verdict: string; signal: string; priceEntry: number | null; priceExit: number | null; quarterReturn: number | null }[] = [];
+  // Institutional walk-forward backtest: the signal is computed only from
+  // data available at the decision date, transaction costs are charged on
+  // every rebalance, and a full risk decomposition is returned.
+  const result = runBacktest(strategy, quarters, {
+    ticker: company.ticker,
+    strategySlug,
+    parameters,
+    windowSize,
+    strongBuyThreshold: strongBuyThreshold,
+    weakSellThreshold: weakSellThreshold,
+    transactionCostBps: 10,
+    slippageBps: 5,
+    signalLagQuarters: 1,
+    riskFreeRate: 0.04,
+  });
 
-  for (let i = windowSize; i < quarters.length - 1; i++) {
-    const window = quarters.slice(i - windowSize, i);
-    const nextQ = quarters[i + 1];
-    let result;
-    try { result = strategy.evaluate(window, parameters); } catch { continue; }
-
-    const signal = result.score >= strongBuyThreshold ? "BUY" : result.score < weakSellThreshold ? "SELL" : "HOLD";
-    const priceEntry = window[window.length - 1].closePrice ? Number(window[window.length - 1].closePrice) : null;
-    const priceExit = nextQ.closePrice ? Number(nextQ.closePrice) : null;
-    const quarterReturn = priceEntry && priceExit && priceEntry > 0 ? (priceExit - priceEntry) / priceEntry : null;
-
-    signals.push({ label: `Q${quarters[i].fiscalQuarter} FY${quarters[i].fiscalYear}`, score: result.score, verdict: result.verdict, signal, priceEntry, priceExit, quarterReturn });
+  if (result.signals.length === 0) {
+    return NextResponse.json(
+      { error: "Not enough history to run the backtest.", warnings: result.summary.warnings },
+      { status: 422 }
+    );
   }
 
-  // Compute hypothetical portfolio vs buy-and-hold
-  let portfolioValue = 100, buyHoldValue = 100;
-  let inPosition = false;
-  const portfolioSeries: { label: string; portfolio: number; buyHold: number; signal: string; score: number }[] = [];
+  const signals = result.signals.map((s) => ({
+    label: s.label,
+    score: s.score,
+    verdict: s.verdict,
+    signal: s.signal,
+    priceEntry: s.priceEntry,
+    priceExit: s.priceExit,
+    quarterReturn: s.grossReturn,
+    netReturn: s.netReturn,
+    costs: s.costs,
+  }));
 
-  const firstPrice = signals[0]?.priceEntry ?? 1;
+  const portfolioSeries = result.equityCurve.map((p) => ({
+    label: p.label,
+    portfolio: Number((p.equity * 100).toFixed(2)),
+    buyHold: p.benchmark !== null ? Number((p.benchmark * 100).toFixed(2)) : 100,
+    signal: signals.find((s) => s.label === p.label)?.signal ?? "HOLD",
+    score: signals.find((s) => s.label === p.label)?.score ?? 0,
+  }));
 
-  for (const s of signals) {
-    const bhReturn = s.quarterReturn ?? 0;
-    buyHoldValue = buyHoldValue * (1 + bhReturn);
-
-    if (s.signal === "BUY") { inPosition = true; }
-    else if (s.signal === "SELL") { inPosition = false; }
-
-    if (inPosition && s.quarterReturn !== null) {
-      portfolioValue = portfolioValue * (1 + s.quarterReturn);
-    }
-    portfolioSeries.push({ label: s.label, portfolio: Number(portfolioValue.toFixed(2)), buyHold: Number(buyHoldValue.toFixed(2)), signal: s.signal, score: s.score });
-  }
-
-  const buySignals = signals.filter(s => s.signal === "BUY");
-  const avgBuyReturn = buySignals.length > 0 ? buySignals.reduce((a, s) => a + (s.quarterReturn ?? 0), 0) / buySignals.length : null;
-  const winRate = buySignals.length > 0 ? buySignals.filter(s => (s.quarterReturn ?? 0) > 0).length / buySignals.length : null;
+  const finalPortfolioValue = (result.equityCurve.at(-1)?.equity ?? 1) * 100;
+  const finalBuyHoldValue = (result.equityCurve.at(-1)?.benchmark ?? 1) * 100;
 
   return NextResponse.json({
     ticker: company.ticker, name: company.name, strategyName: strategy.name,
     signals, portfolioSeries,
     summary: {
-      totalQuarters: signals.length, buySignals: buySignals.length,
-      sellSignals: signals.filter(s => s.signal === "SELL").length,
-      holdSignals: signals.filter(s => s.signal === "HOLD").length,
-      finalPortfolioValue: Number(portfolioValue.toFixed(2)),
-      finalBuyHoldValue: Number(buyHoldValue.toFixed(2)),
-      outperformance: Number((portfolioValue - buyHoldValue).toFixed(2)),
-      avgBuyReturn: avgBuyReturn !== null ? Number((avgBuyReturn * 100).toFixed(2)) : null,
-      winRate: winRate !== null ? Number((winRate * 100).toFixed(1)) : null,
+      totalQuarters: result.summary.observations,
+      buySignals: result.summary.buySignals,
+      sellSignals: result.summary.sellSignals,
+      holdSignals: result.summary.holdSignals,
+      finalPortfolioValue: Number(finalPortfolioValue.toFixed(2)),
+      finalBuyHoldValue: Number(finalBuyHoldValue.toFixed(2)),
+      outperformance: Number((finalPortfolioValue - finalBuyHoldValue).toFixed(2)),
+      avgBuyReturn: null,
+      winRate: result.summary.winRate !== null ? Number((result.summary.winRate * 100).toFixed(1)) : null,
     },
+    risk: {
+      totalReturn: result.summary.totalReturn,
+      annualisedReturn: result.summary.annualisedReturn,
+      annualisedVol: result.summary.annualisedVol,
+      sharpe: result.summary.sharpe,
+      sortino: result.summary.sortino,
+      calmar: result.summary.calmar,
+      maxDrawdown: result.summary.maxDrawdown,
+      cvar95: result.summary.cvar95,
+      turnoverPerPeriod: result.summary.turnoverPerPeriod,
+      totalCosts: result.summary.totalCosts,
+      exposure: result.summary.exposure,
+      deflatedSharpeProb: result.summary.deflatedSharpeProb,
+      sharpeCI: result.summary.sharpeCI,
+    },
+    warnings: result.summary.warnings,
   });
 }
