@@ -42,6 +42,13 @@ Stationarity/ARIMA/GARCH, Ledoit–Wolf mean–variance, risk parity,
 Black–Litterman, min-CVaR, RL portfolio agents and a real-data research
 pipeline. See `project/ml/README.md`.
 
+### Deployment
+
+`project/web` (Next.js) deploys to Vercel; `project/api` (FastAPI ETL) needs a
+long-running Python host. Full walkthrough — database, environment variables,
+Stripe webhooks, custom domain — in
+[`project/web/docs/DEPLOYMENT.md`](project/web/docs/DEPLOYMENT.md).
+
 ---
 
 ## Development
