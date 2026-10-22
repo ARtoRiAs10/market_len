@@ -42,6 +42,7 @@ model User {
   AnalystNote  AnalystNote[]
   TeamMember   TeamMember[]
   TotpSecret   TotpSecret?
+  portfolios   Portfolio[]
 
   @@index([email])
 }
@@ -184,6 +185,7 @@ model Company {
   EarningsDate  EarningsDate[]
   ScoreAlert    ScoreAlert[]
   AnalystNote   AnalystNote[]
+  portfolioPositions PortfolioPosition[]
 
   @@index([ticker])
   @@index([sector])
@@ -442,6 +444,83 @@ enum AlertCondition {
   SCORE_BELOW
   SCORE_CHANGE
   VERDICT_CHANGE
+}
+
+// ── Price Bars (daily OHLCV) ─────────────────────────────────────────────────
+// One row per ticker per trading day. `ticker` is a plain string (not a FK)
+// so market indices and benchmarks (SPY, QQQ, ^GSPC) can be stored without
+// creating a Company row.
+model PriceBar {
+  id        String   @id @default(cuid())
+  ticker    String
+  date      DateTime
+
+  open       Decimal? @db.Decimal(14, 4)
+  high       Decimal? @db.Decimal(14, 4)
+  low        Decimal? @db.Decimal(14, 4)
+  close      Decimal? @db.Decimal(14, 4)
+  adjClose   Decimal? @db.Decimal(14, 4) // split/dividend adjusted close
+  volume     Decimal? @db.Decimal(20, 2)
+
+  source   DataSource @default(MOCK)
+  createdAt DateTime  @default(now())
+
+  @@unique([ticker, date])
+  @@index([ticker, date])
+}
+
+// ── Portfolios ────────────────────────────────────────────────────────────────
+model Portfolio {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?  @db.Text
+  baseCurrency String  @default("USD")
+  benchmarkTicker String? // e.g. "SPY"
+  cashBalance Decimal  @default(0) @db.Decimal(20, 2)
+  isDefault   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  positions PortfolioPosition[]
+  snapshots PortfolioSnapshot[]
+
+  @@index([userId])
+}
+
+model PortfolioPosition {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  companyId   String?
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  ticker      String
+  shares      Decimal   @default(0) @db.Decimal(20, 4)
+  targetWeight Decimal? @db.Decimal(10, 6)
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([portfolioId, ticker])
+  @@index([portfolioId])
+}
+
+// Daily NAV history for a portfolio (used for drawdown/risk charts).
+model PortfolioSnapshot {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  date        DateTime
+  nav         Decimal   @db.Decimal(20, 4)
+  cash        Decimal?  @db.Decimal(20, 2)
+  grossValue  Decimal?  @db.Decimal(20, 2)
+  benchmarkNav Decimal? @db.Decimal(20, 4)
+  createdAt   DateTime  @default(now())
+
+  @@unique([portfolioId, date])
+  @@index([portfolioId, date])
 }
 
 // ── Analyst Notes ─────────────────────────────────────────────────────────────

@@ -237,3 +237,95 @@ function round2(n: number): number {
 }
 
 export const DEFAULT_SOURCE: DataSource = "MOCK";
+
+export interface MockPriceBar {
+  date: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  adjClose: number;
+  volume: number;
+}
+
+/**
+ * Deterministic daily price series (OHLCV) for a ticker.
+ *
+ * Used by the mock data provider so the risk, momentum and portfolio engines
+ * have a genuine daily series to work with when no market-data API key is
+ * configured. The series is a seeded geometric random walk with mild
+ * momentum, mean reversion and volatility clustering so that the risk
+ * statistics (Sharpe, drawdown, VaR) behave realistically.
+ */
+export function generateMockDailyBars(ticker: string, days = 500): MockPriceBar[] {
+  const rnd = mulberry32(hashStringToSeed(ticker + ":prices"));
+  const bars: MockPriceBar[] = [];
+
+  const startPrice = 20 + rnd() * 280;
+  const drift = (rnd() - 0.45) * 0.0009;          // ±0.09% per day
+  const baseVol = 0.008 + rnd() * 0.016;          // 0.8%–2.4% daily vol
+  let price = startPrice;
+  let vol = baseVol;
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today.getTime() - i * 86_400_000);
+    // Skip weekends to look like a real trading calendar.
+    if (date.getUTCDay() === 0 || date.getUTCDay() === 6) continue;
+
+    // GARCH-like volatility clustering
+    const shock = (rnd() - 0.5) * 2;
+    vol = 0.9 * vol + 0.1 * baseVol + 0.02 * baseVol * Math.abs(shock);
+
+    const ret = drift + shock * vol;
+    const open = price * (1 + (rnd() - 0.5) * 0.002);
+    price = Math.max(0.5, price * (1 + ret));
+    const close = price;
+    const high = Math.max(open, close) * (1 + rnd() * 0.004);
+    const low = Math.min(open, close) * (1 - rnd() * 0.004);
+    const volume = Math.round(200_000 + rnd() * 8_000_000);
+
+    bars.push({
+      date,
+      open: Number(open.toFixed(4)),
+      high: Number(high.toFixed(4)),
+      low: Number(low.toFixed(4)),
+      close: Number(close.toFixed(4)),
+      adjClose: Number(close.toFixed(4)),
+      volume,
+    });
+  }
+
+  return bars;
+}
+
+/**
+ * Re-scale a daily bar series so that the close on `targetDate` matches
+ * `targetPrice` (used to keep the daily series consistent with the quarterly
+ * close prices stored on the fact table).
+ */
+export function alignBarSeries(
+  bars: MockPriceBar[],
+  targetDate: Date,
+  targetPrice: number
+): MockPriceBar[] {
+  const target = targetDate.getTime();
+  let index = bars.findIndex((b) => b.date.getTime() >= target);
+  if (index < 0) index = bars.length - 1;
+  const anchor = bars[index];
+  if (!anchor || anchor.close <= 0) return bars;
+  const factor = targetPrice / anchor.close;
+  return bars.map((b, i) => {
+    const scale = i >= index ? factor : 1;
+    return {
+      ...b,
+      open: Number((b.open * scale).toFixed(4)),
+      high: Number((b.high * scale).toFixed(4)),
+      low: Number((b.low * scale).toFixed(4)),
+      close: Number((b.close * scale).toFixed(4)),
+      adjClose: Number((b.adjClose * scale).toFixed(4)),
+    };
+  });
+}
