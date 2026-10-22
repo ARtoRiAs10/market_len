@@ -1,0 +1,11 @@
+# QuantLab (MarketLens research lab)
+#
+#   pip install -r project/ml/requirements.txt
+#
+# The FastAPI ETL microservice has its own requirements in
+# project/api/requirements.txt.
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+statsmodels>=0.14
+pytest>=8.0

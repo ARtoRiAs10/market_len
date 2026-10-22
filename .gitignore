@@ -1,0 +1,48 @@
+# Root ignore rules for the MarketLens monorepo.
+#
+# Storage policy
+# --------------
+# The *tracked* repository is intentionally tiny (< 1 MB). Everything that
+# can be regenerated locally is ignored:
+#   * node_modules / .next / build output
+#   * Python bytecode, virtualenvs and the QuantLab HTTP cache
+#   * Notebook checkpoints and executed-notebook outputs
+#
+# Run `bash scripts/clean.sh` to reclaim disk space at any time.
+
+# ── Node / Next.js ───────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── QuantLab HTTP cache (regenerate on demand, ~10–40 MB) ───────────────────
+project/ml/.cache/
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+project/ml/notebooks/outputs/
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Docs (kept outside the repo, never committed) ───────────────────────────
+marketlens_docs/
+docs-outside/
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
