@@ -12,10 +12,12 @@ export default async function InvitePage({ params }: { params: { token: string }
 
   const invite = await prisma.teamInvite.findUnique({
     where: { token: params.token },
-    include: { team: true },
   });
 
   if (!invite || invite.expiresAt < new Date()) notFound();
+
+  const team = await prisma.team.findUnique({ where: { id: invite.teamId } });
+  if (!team) notFound();
 
   // If logged in and email matches, accept automatically
   if (session?.user?.email === invite.email) {
@@ -39,7 +41,7 @@ export default async function InvitePage({ params }: { params: { token: string }
             <Users className="h-6 w-6" />
           </div>
           <CardTitle>You&apos;re invited to join</CardTitle>
-          <CardDescription className="text-base font-medium text-foreground">{invite.team.name}</CardDescription>
+          <CardDescription className="text-base font-medium text-foreground">{team.name}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <p className="text-sm text-muted-foreground">

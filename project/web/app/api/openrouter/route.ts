@@ -13,21 +13,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getUserPlan } from "@/lib/plan-limits";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
-
-const OPENROUTER_MODELS = [
-  { id: "anthropic/claude-opus-4-6",     label: "Claude Opus 4.6 (Anthropic)" },
-  { id: "openai/gpt-4o",                  label: "GPT-4o (OpenAI)" },
-  { id: "openai/gpt-4o-mini",             label: "GPT-4o Mini (OpenAI)" },
-  { id: "google/gemini-pro-1.5",          label: "Gemini Pro 1.5 (Google)" },
-  { id: "mistralai/mistral-large",        label: "Mistral Large" },
-  { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B (Meta)" },
-  { id: "deepseek/deepseek-r1",           label: "DeepSeek R1" },
-  { id: "qwen/qwen-2.5-72b-instruct",    label: "Qwen 2.5 72B" },
-  { id:"nvidia/nemotron-3-super-120b-a12b:free" , label:"nvidia/nemotron"},
-  { id: "openrouter/free",                label: "openrouter/free"},
-];
-
-export { OPENROUTER_MODELS };
+import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_MODELS } from "@/lib/ai/models";
 
 // Only allow models from the published list — otherwise any authenticated
 // user could pass an arbitrary model string to the upstream (paid) API,
@@ -39,7 +25,7 @@ const schema = z.object({
   strategySlug: z.string().max(80),
   question: z.string().max(600),
   parameters: z.record(z.union([z.number(), z.string(), z.boolean()])).default({}),
-  model: z.enum(ALLOWED_MODEL_IDS).default("anthropic/claude-opus-4-6"),
+  model: z.enum(ALLOWED_MODEL_IDS).default(DEFAULT_OPENROUTER_MODEL),
 });
 
 export async function GET() {

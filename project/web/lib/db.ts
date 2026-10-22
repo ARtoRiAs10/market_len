@@ -14,7 +14,7 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
@@ -27,8 +27,26 @@ function createPrismaClient() {
   });
 }
 
-export const prisma = globalThis.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prisma = prisma;
+function resolveClient(): PrismaClient {
+  if (globalThis.prisma) return globalThis.prisma;
+  const client = createPrismaClient();
+  if (process.env.NODE_ENV !== "production") {
+    globalThis.prisma = client;
+  }
+  return client;
 }
+
+/**
+ * Prisma client proxy.
+ *
+ * The client is created lazily on first use so that importing a module (or
+ * running `next build` without secrets) does not explode — the missing
+ * `DATABASE_URL` surfaces as a clear error on the first query instead.
+ */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = resolveClient();
+    const value = Reflect.get(client, prop);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

@@ -5,13 +5,31 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Anything numeric-ish, including Prisma `Decimal` instances. */
+export type NumericLike = number | string | { toNumber(): number } | null | undefined;
+
+/** Normalise a numeric-ish value (including Prisma `Decimal`) to a number. */
+export function toNumeric(value: NumericLike): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === "object" && typeof value.toNumber === "function") {
+    const parsed = value.toNumber();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function formatCurrency(
-  value: number | string | null | undefined,
+  value: NumericLike,
   options?: { compact?: boolean; currency?: string }
 ): string {
   if (value === null || value === undefined) return "—";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (Number.isNaN(num)) return "—";
+  const num = toNumeric(value);
+  if (num === null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: options?.currency ?? "USD",
@@ -21,22 +39,22 @@ export function formatCurrency(
 }
 
 export function formatPercent(
-  value: number | string | null | undefined,
+  value: NumericLike,
   decimals = 1
 ): string {
   if (value === null || value === undefined) return "—";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (Number.isNaN(num)) return "—";
+  const num = toNumeric(value);
+  if (num === null) return "—";
   return `${(num * 100).toFixed(decimals)}%`;
 }
 
 export function formatNumber(
-  value: number | string | null | undefined,
+  value: NumericLike,
   decimals = 2
 ): string {
   if (value === null || value === undefined) return "—";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (Number.isNaN(num)) return "—";
+  const num = toNumeric(value);
+  if (num === null) return "—";
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: decimals,
   }).format(num);

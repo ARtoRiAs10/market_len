@@ -8,18 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Send, ChevronDown } from "lucide-react";
-
-const OPENROUTER_MODELS = [
-  { id:"nvidia/nemotron-3-super-120b-a12b:free" , label:"nvidia/nemotron"},
-  { id: "openrouter/free",                label: "openrouter/free"},
-  { id: "anthropic/claude-opus-4-6",     label: "Claude Opus 4.6" },
-  { id: "openai/gpt-4o",                  label: "GPT-4o" },
-  { id: "openai/gpt-4o-mini",             label: "GPT-4o Mini" },
-  { id: "google/gemini-pro-1.5",          label: "Gemini Pro 1.5" },
-  { id: "mistralai/mistral-large",        label: "Mistral Large" },
-  { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B" },
-  { id: "deepseek/deepseek-r1",           label: "DeepSeek R1" },
-];
+import { OPENROUTER_MODELS } from "@/lib/ai/models";
 
 const SUGGESTIONS = [
   "Why did the score change this quarter?",
