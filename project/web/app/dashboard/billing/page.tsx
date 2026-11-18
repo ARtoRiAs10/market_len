@@ -43,7 +43,7 @@ export default async function BillingPage() {
           </ul>
         </CardContent>
       </Card>
-      <BillingPlans currentPlan={plan} hasStripeCustomer={!!sub?.stripeCustomerId} />
+      <BillingPlans currentPlan={plan} hasRazorpaySubscription={!!sub?.razorpaySubscriptionId} />
     </div>
   );
 }

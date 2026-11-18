@@ -18,15 +18,25 @@ export function IndexWatchlistImporter({ lists, watchedTickers }: { lists: Index
 
   async function importList(list: IndexList) {
     setImporting(list.id);
-    let added = 0;
-    for (const ticker of list.tickers) {
-      if (watched.has(ticker)) continue;
-      const res = await fetch("/api/companies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker }) });
-      if (res.ok) added++;
+    try {
+      const res = await fetch("/api/watchlists/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers: list.tickers, listName: list.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: `Import failed`, description: data.error ?? "Please try again.", variant: "destructive" as any });
+        return;
+      }
+      toast({
+        title: `Imported ${data.added} companies`,
+        description: `${data.skipped} already watched${data.failed ? `, ${data.failed} failed` : ""}. From ${list.name}`,
+      });
+      router.refresh();
+    } finally {
+      setImporting(null);
     }
-    setImporting(null);
-    toast({ title: `Imported ${added} companies`, description: `From ${list.name}` });
-    router.refresh();
   }
 
   return (

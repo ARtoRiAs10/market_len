@@ -12,7 +12,15 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-  // Stripe (optional: the app runs without billing; billing routes return 503)
+  // Razorpay (optional — leave blank to disable billing; billing routes return 503)
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_PLAN_PRO_MONTHLY: z.string().optional(),
+  RAZORPAY_PLAN_PRO_YEARLY: z.string().optional(),
+  RAZORPAY_PLAN_ENTERPRISE_MONTHLY: z.string().optional(),
+
+  // Stripe (legacy, optional; the UI now uses Razorpay)
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),

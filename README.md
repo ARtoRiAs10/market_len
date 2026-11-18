@@ -1,6 +1,6 @@
 # MarketLens v3 📊
 
-> Full-stack financial analysis SaaS — Next.js 14, FastAPI, Neon Postgres, Stripe, OpenRouter AI.
+> Full-stack financial analysis SaaS — Next.js 14, FastAPI, Neon Postgres, Razorpay, OpenRouter AI.
 
 ---
 
@@ -11,7 +11,7 @@
 | Service | What for | Free tier? |
 |---------|---------|-----------|
 | [Neon](https://console.neon.tech) | Serverless Postgres | ✅ Yes |
-| [Stripe](https://dashboard.stripe.com) | Subscriptions | ✅ Test mode |
+| [Razorpay](https://dashboard.razorpay.com) | Subscriptions (Razorpay) | ✅ Test mode |
 | [OpenRouter](https://openrouter.ai) | AI Analyst (200+ models) | ✅ Pay-per-use |
 | [Resend](https://resend.com) | Weekly digest email | ✅ 3k/mo free |
 
@@ -29,7 +29,7 @@
 | **Factor exposure** | `/dashboard/factors` — cross-sectional percentiles for value, profitability, investment, size, momentum, quality, accruals and low volatility. |
 | **Backtesting** | Cost-aware walk-forward engine with a reporting lag, alpha/beta, deflated Sharpe probability and a block-bootstrap Sharpe CI. |
 | **Quant engine** | `lib/quant/` — statistics (OLS/HAC, Ledoit–Wolf, deflated Sharpe), risk (VaR/CVaR, drawdown, beta/alpha), valuation (DCF), optimiser, factors, attribution, backtester. |
-| **Data** | Pluggable providers (MOCK / Alpha Vantage / FMP) → `PriceBar` fact table → portfolios, strategies and risk analytics. |
+| **Data** | Pluggable providers (MOCK / Alpha Vantage / FMP) → `PriceBar` fact table → portfolios, strategies and risk analytics. Bundled real snapshots for NIFTY 50, BSE SENSEX and the global top 10 public companies (`lib/market-data/snapshot.ts`) so the app is useful with zero API keys. |
 
 ### `project/api` — FastAPI ETL microservice
 
@@ -46,7 +46,7 @@ pipeline. See `project/ml/README.md`.
 
 `project/web` (Next.js) deploys to Vercel; `project/api` (FastAPI ETL) needs a
 long-running Python host. Full walkthrough — database, environment variables,
-Stripe webhooks, custom domain — in
+Razorpay webhooks, custom domain — in
 [`project/web/docs/DEPLOYMENT.md`](project/web/docs/DEPLOYMENT.md).
 
 **Vercel quick start:** import the repository, then set **Root Directory** to

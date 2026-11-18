@@ -106,7 +106,7 @@ model ApiKey {
 }
 
 // ----------------------------------------------------------------------------
-// Billing / Subscriptions (Stripe)
+// Billing / Subscriptions (Razorpay; legacy Stripe fields retained)
 // ----------------------------------------------------------------------------
 
 enum PlanTier {
@@ -133,6 +133,10 @@ model Subscription {
   stripeCustomerId     String?            @unique
   stripeSubscriptionId String?            @unique
   stripePriceId        String?
+
+  razorpayCustomerId     String? @unique
+  razorpaySubscriptionId String? @unique
+  razorpayPlanId         String?
   plan                 PlanTier           @default(FREE)
   status               SubscriptionStatus @default(NONE)
   currentPeriodEnd     DateTime?
@@ -142,6 +146,7 @@ model Subscription {
   updatedAt DateTime @updatedAt
 
   @@index([stripeCustomerId])
+  @@index([razorpaySubscriptionId])
 }
 
 model PlanLimit {
@@ -196,6 +201,7 @@ enum DataSource {
   ALPHA_VANTAGE
   FMP
   MANUAL
+  SNAPSHOT
 }
 
 // One row per company per fiscal quarter — the core fact table used by ETL + strategies

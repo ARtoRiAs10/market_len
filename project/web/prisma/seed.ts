@@ -21,6 +21,12 @@ import {
   generateMockQuarters,
   generateMockDailyBars,
 } from "../lib/mock-data";
+import {
+  NIFTY_50_CONSTITUENTS,
+  SENSEX_CONSTITUENTS,
+  GLOBAL_TOP_10,
+  MARKET_SNAPSHOT_META,
+} from "../lib/market-data/snapshot";
 
 async function main() {
   console.log("🌱  Seeding MarketLens database…\n");
@@ -125,6 +131,64 @@ async function main() {
   }
   console.log(`  ✓ ${seedList.length} companies × 12 quarters (admin watching 5, demo watching 2)`);
 
+  // ── 3b. Real market universe (NIFTY 50, SENSEX, global leaders) ──────────
+  // These are real public constituents/market-cap snapshots. We create the
+  // companies and deterministic mock financials so every watchlist ticker can
+  // be opened and used with the strategy engine immediately.
+  const universe = new Map<string, { name: string; sector: string; country: string; exchange: string }>();
+  for (const c of NIFTY_50_CONSTITUENTS) {
+    universe.set(c.symbol, { name: c.name, sector: c.sector, country: "India", exchange: "NSE" });
+  }
+  for (const c of SENSEX_CONSTITUENTS) {
+    if (!universe.has(c.symbol)) {
+      universe.set(c.symbol, { name: c.name, sector: c.sector, country: "India", exchange: "BSE" });
+    }
+  }
+  for (const c of GLOBAL_TOP_10) {
+    if (!universe.has(c.ticker)) {
+      universe.set(c.ticker, { name: c.name, sector: "Global", country: c.country, exchange: "GLOBAL" });
+    }
+  }
+
+  const universeIds: { ticker: string; id: string }[] = [];
+  for (const [ticker, info] of universe) {
+    const company = await prisma.company.upsert({
+      where: { ticker },
+      create: {
+        ticker,
+        name: info.name,
+        sector: info.sector,
+        industry: info.sector,
+        exchange: info.exchange,
+        country: info.country,
+        description: `${info.name} (${ticker}) — constituent snapshot from ${MARKET_SNAPSHOT_META.retrievedAt}.`,
+        source: "SNAPSHOT",
+      },
+      update: {},
+    });
+    universeIds.push({ ticker, id: company.id });
+
+    for (const q of generateMockQuarters(ticker, 12)) {
+      await prisma.financialQuarter.upsert({
+        where: { companyId_fiscalYear_fiscalQuarter: { companyId: company.id, fiscalYear: q.fiscalYear, fiscalQuarter: q.fiscalQuarter } },
+        create: {
+          companyId: company.id, fiscalYear: q.fiscalYear, fiscalQuarter: q.fiscalQuarter,
+          periodEndDate: q.periodEndDate, revenue: q.revenue, costOfRevenue: q.costOfRevenue,
+          grossProfit: q.grossProfit, operatingExpense: q.operatingExpense, operatingIncome: q.operatingIncome,
+          netIncome: q.netIncome, ebitda: q.ebitda, eps: q.eps, sharesOutstanding: q.sharesOutstanding,
+          totalAssets: q.totalAssets, totalLiabilities: q.totalLiabilities, totalEquity: q.totalEquity,
+          currentAssets: q.currentAssets, currentLiabilities: q.currentLiabilities, cash: q.cash,
+          totalDebt: q.totalDebt, longTermDebt: q.longTermDebt, inventory: q.inventory,
+          receivables: q.receivables, operatingCashFlow: q.operatingCashFlow, capex: q.capex,
+          freeCashFlow: q.freeCashFlow, dividendsPaid: q.dividendsPaid,
+          closePrice: q.closePrice, volumeAvg: q.volumeAvg,
+        },
+        update: {},
+      });
+    }
+  }
+  console.log(`  ✓ ${universeIds.length} real market-universe companies (NIFTY 50 + SENSEX + global top 10)`);
+
   // ── 4. Daily price bars (portfolio + risk analytics) ─────────────────────
   const priceTickers = [...seedList.map((c) => c.ticker), "SPY"];
   const barRows = priceTickers.flatMap((ticker) =>
@@ -225,16 +289,20 @@ async function main() {
 
   // ── 5. Index watchlists ───────────────────────────────────────────────────
   const indexLists = [
+    { name: "NIFTY 50", description: `50 constituents from the NIFTY 50 index (snapshot ${MARKET_SNAPSHOT_META.retrievedAt}; source: Wikipedia).`, region: "IN", tickers: NIFTY_50_CONSTITUENTS.map(c => c.symbol) },
+    { name: "BSE SENSEX", description: `30 constituents from the BSE SENSEX (snapshot ${MARKET_SNAPSHOT_META.retrievedAt}; source: Wikipedia).`, region: "IN", tickers: SENSEX_CONSTITUENTS.map(c => c.symbol) },
+    { name: "Global Top 10 (Public)", description: `Top 10 publicly listed companies by market cap (snapshot ${MARKET_SNAPSHOT_META.retrievedAt}; source: companiesmarketcap.com). Private companies excluded.`, region: "GLOBAL", tickers: GLOBAL_TOP_10.map(c => c.ticker) },
     { name: "S&P 500 — Technology",  description: "Large-cap US technology sector", region: "US", tickers: ["AAPL","MSFT","NVDA","GOOGL","META","AVGO","ORCL","AMD","CSCO","INTC"] },
     { name: "S&P 500 — Healthcare",  description: "Large-cap US healthcare sector", region: "US", tickers: ["JNJ","UNH","LLY","ABBV","PFE","MRK","TMO","ABT","DHR","BMY"] },
     { name: "S&P 500 — Financials",  description: "Large-cap US financial sector",  region: "US", tickers: ["JPM","V","MA","BAC","WFC","GS","MS","BLK","SCHW","AXP"] },
-    { name: "NIFTY 50 — Select",     description: "Top Indian large-cap stocks",    region: "IN", tickers: ["RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","ITC","SBIN","BHARTIARTL","BAJFINANCE"] },
     { name: "FTSE 100 — Select",     description: "Top UK large-cap stocks",        region: "UK", tickers: ["SHEL","AZN","HSBA","ULVR","BP","RIO","GSK","BATS","LSEG","BHP"] },
   ];
+  // Remove the old curated list now that the full NIFTY 50 is bundled.
+  await prisma.indexWatchlist.deleteMany({ where: { name: "NIFTY 50 — Select" } });
   for (const l of indexLists) {
-    await prisma.indexWatchlist.upsert({ where: { name: l.name }, create: l, update: {} });
+    await prisma.indexWatchlist.upsert({ where: { name: l.name }, create: l, update: { description: l.description, region: l.region, tickers: l.tickers } });
   }
-  console.log("  ✓ 5 index watchlists");
+  console.log(`  ✓ ${indexLists.length} index watchlists (NIFTY 50, SENSEX, global top 10, sector lists)`);
 
   // ── 6. Sample analyst note for admin ─────────────────────────────────────
   const firstCompany = companyIds[0];

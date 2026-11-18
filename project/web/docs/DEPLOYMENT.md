@@ -89,12 +89,11 @@ Add these in **Project → Settings → Environment Variables**.
 |---|---|
 | `NEXTAUTH_URL` | `https://your-app.vercel.app` (or your custom domain) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth login |
-| `STRIPE_SECRET_KEY` | `sk_live_…` (or `sk_test_…`) — billing |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_…` |
-| `STRIPE_WEBHOOK_SECRET` | from `stripe listen` or the Stripe dashboard |
-| `STRIPE_PRICE_ID_PRO_MONTHLY` | Stripe price ID |
-| `STRIPE_PRICE_ID_PRO_YEARLY` | Stripe price ID |
-| `STRIPE_PRICE_ID_ENTERPRISE_MONTHLY` | Enterprise tier price |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Razorpay billing |
+| `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook signing secret |
+| `RAZORPAY_PLAN_PRO_MONTHLY` | Razorpay plan ID |
+| `RAZORPAY_PLAN_PRO_YEARLY` | Razorpay plan ID |
+| `RAZORPAY_PLAN_ENTERPRISE_MONTHLY` | Razorpay plan ID (optional) |
 | `OPENROUTER_API_KEY` | AI Analyst (200+ models) |
 | `ANTHROPIC_API_KEY` | alternative AI provider |
 | `RESEND_API_KEY` / `EMAIL_FROM` | weekly digest email |
@@ -102,9 +101,10 @@ Add these in **Project → Settings → Environment Variables**.
 | `ALPHA_VANTAGE_API_KEY` / `FMP_API_KEY` | needed for the live providers |
 | `ETL_SERVICE_URL` / `ETL_SERVICE_API_KEY` | only if you deploy the FastAPI service (below) |
 
-**Stripe is optional.** If you leave the Stripe variables blank, the rest of
-the app runs normally and the billing endpoints return `503` with a clear
-message instead of crashing. You can add Stripe later and redeploy.
+**Razorpay is optional.** If you leave the Razorpay variables blank, the rest
+of the app runs normally and the billing endpoints return `503` with a clear
+message instead of crashing. The legacy Stripe fields/routes are kept but are
+not used by the billing UI.
 
 `lib/env.ts` validates the required set lazily and prints exactly which
 variables are missing, so a misconfiguration shows up immediately in the
@@ -117,9 +117,20 @@ Vercel function logs.
 1. **Auth callback** — add the Vercel domain to your Google OAuth client's
    authorised redirect URIs:
    `https://your-app.vercel.app/api/auth/callback/google`.
-2. **Stripe webhook** — point it at
-   `https://your-app.vercel.app/api/stripe/webhook`
-   and copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
+2. **Razorpay webhook** — point it at
+   `https://your-app.vercel.app/api/razorpay/webhook`
+   and copy the signing secret into `RAZORPAY_WEBHOOK_SECRET`.
+
+   Razorpay billing setup:
+   1. Create three subscription plans in Razorpay Dashboard → Subscriptions → Plans
+      (Pro monthly, Pro yearly, optional Enterprise monthly).
+   2. Copy the plan IDs into `RAZORPAY_PLAN_PRO_MONTHLY`,
+      `RAZORPAY_PLAN_PRO_YEARLY`, and `RAZORPAY_PLAN_ENTERPRISE_MONTHLY`.
+   3. Copy the Key ID / Key Secret into `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`.
+   4. Add the webhook URL above and select the subscription events.
+
+   If the Razorpay variables are blank, the app still works and the billing
+   buttons return a clear "Razorpay is not configured" message.
 3. **Seed the database** (optional):
    ```bash
    cd project/web
