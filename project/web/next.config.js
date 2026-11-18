@@ -1,7 +1,12 @@
 /** @type {import('next').NextConfig} */
+const isVercel = Boolean(process.env.VERCEL);
+
 const nextConfig = {
   reactStrictMode: true,
-  output: "standalone",
+  poweredByHeader: false,
+  // Docker / self-hosting uses a standalone server. Vercel builds its own
+  // serverless output, so don't emit standalone there.
+  ...(isVercel ? {} : { output: "standalone" }),
   experimental: {
     serverActions: { bodySizeLimit: "5mb" },
   },

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getAppUrl } from "@/lib/env";
 import { getStrategyBySlug } from "@/lib/strategies/registry";
 import { rateLimit } from "@/lib/rate-limit";
 import { getUserPlan } from "@/lib/plan-limits";
@@ -92,7 +93,7 @@ Question: ${question}`;
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
+        "HTTP-Referer": getAppUrl(),
         "X-Title": "MarketLens AI Analyst",
       },
       body: JSON.stringify({

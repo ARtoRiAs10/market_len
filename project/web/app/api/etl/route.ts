@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getAppUrl } from "@/lib/env";
 import { checkEtlJobLimit } from "@/lib/plan-limits";
 import { triggerEtlJob } from "@/lib/etl-client";
 import { rateLimit } from "@/lib/rate-limit";
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
       ticker: upperTicker,
       quarters,
       sourceType,
-      callbackUrl: `${process.env.NEXTAUTH_URL}/api/etl/${job.id}/callback`,
+      callbackUrl: `${getAppUrl()}/api/etl/${job.id}/callback`,
       callbackSecret,
     });
   } catch (err: any) {

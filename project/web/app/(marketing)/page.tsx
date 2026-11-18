@@ -53,6 +53,34 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="strategies" className="border-b">
+        <div className="container py-20">
+          <h2 className="font-display text-3xl">Nine strategies, one audit trail</h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">
+            Every model is implemented in TypeScript, parameterised, and versioned. Run a
+            screen against a company and see exactly which criteria passed.
+          </p>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ["Piotroski F-Score + DuPont", "9-point quality screen with ROE decomposition."],
+              ["Altman Z-Score", "Five-variable bankruptcy-risk model."],
+              ["Beneish M-Score", "Eight-index earnings-manipulation screen."],
+              ["Fama–French 5-Factor", "Value, profitability, investment, size, momentum."],
+              ["Magic Formula", "Greenblatt's ROIC + earnings-yield rank."],
+              ["FCFF DCF", "Five-year discounted cash-flow valuation."],
+            ].map(([name, description]) => (
+              <div key={name} className="rounded-lg border bg-card p-5">
+                <p className="font-medium">{name}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+              </div>
+            ))}
+          </div>
+          <Link href="/register" className="mt-8 inline-block">
+            <Button variant="outline">Explore the research library <ArrowRight className="h-4 w-4" /></Button>
+          </Link>
+        </div>
+      </section>
+
       <section id="etl" className="border-b">
         <div className="container py-20">
           <div className="grid gap-10 lg:grid-cols-3">

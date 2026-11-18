@@ -31,6 +31,10 @@ export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
 
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Stripe webhook is not configured." }, { status: 503 });
+  }
+
   if (!signature) {
     return NextResponse.json({ error: "Missing stripe-signature header" }, { status: 400 });
   }

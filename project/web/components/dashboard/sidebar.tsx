@@ -10,14 +10,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useDashboardShell } from "@/components/dashboard/shell-context";
 
 interface StrategyNavItem { slug: string; name: string; category: string; icon: string | null }
 interface WatchlistNavItem { ticker: string; name: string }
 
 export function DashboardSidebar({ strategies, watchlist }: { strategies: StrategyNavItem[]; watchlist: WatchlistNavItem[] }) {
   const pathname = usePathname();
+  const { mobileOpen, setMobileOpen } = useDashboardShell();
   const [collapsed, setCollapsed] = React.useState(false);
   const [open, setOpen] = React.useState<Record<string, boolean>>({ analytics: true, strategies: true, watchlist: true, account: false });
+
+  // Close the mobile drawer whenever the route changes.
+  React.useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname, setMobileOpen]);
 
   const toggle = (k: string) => setOpen(o => ({ ...o, [k]: !o[k] }));
 
@@ -28,24 +35,45 @@ export function DashboardSidebar({ strategies, watchlist }: { strategies: Strate
   }, [strategies]);
 
   return (
-    <aside className={cn("sticky top-0 flex h-screen flex-col border-r bg-background transition-[width] duration-200", collapsed ? "w-[60px]" : "w-[260px]")}>
-      {/* Logo */}
-      <div className="flex h-16 items-center border-b px-3">
-        {!collapsed && (
-          <Link href="/dashboard" className="flex flex-1 items-center gap-2">
-            <LineChart className="h-5 w-5 shrink-0 text-signal-positive" />
-            <span className="font-display text-base tracking-tight">MarketLens</span>
-          </Link>
+    <>
+      {/* Mobile drawer backdrop */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 transition-opacity md:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
-        {collapsed && <LineChart className="mx-auto h-5 w-5 text-signal-positive" />}
-        <Button
-          variant="ghost" size="icon"
-          className={cn("h-7 w-7 shrink-0", collapsed && "absolute -right-3.5 top-5 z-10 rounded-full border bg-background shadow-sm")}
-          onClick={() => setCollapsed(c => !c)}
-        >
-          {collapsed ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-[260px] flex-col border-r bg-background transition-[width,transform] duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          collapsed ? "md:w-[60px]" : "md:w-[260px]"
+        )}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center border-b px-3">
+          {!collapsed && (
+            <Link href="/dashboard" className="flex flex-1 items-center gap-2">
+              <LineChart className="h-5 w-5 shrink-0 text-signal-positive" />
+              <span className="font-display text-base tracking-tight">MarketLens</span>
+            </Link>
+          )}
+          {collapsed && <LineChart className="mx-auto h-5 w-5 text-signal-positive" />}
+          <Button
+            variant="ghost" size="icon"
+            className={cn("h-7 w-7 shrink-0 md:inline-flex", collapsed && "md:absolute md:-right-3.5 md:top-5 md:z-10 md:rounded-full md:border md:bg-background md:shadow-sm")}
+            onClick={() => {
+              if (mobileOpen) setMobileOpen(false);
+              else setCollapsed(c => !c);
+            }}
+            aria-label={mobileOpen ? "Close navigation" : collapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            {mobileOpen ? <ChevronsLeft className="h-3.5 w-3.5" /> : collapsed ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 py-3 space-y-0.5">
         {/* Core nav */}
@@ -120,6 +148,7 @@ export function DashboardSidebar({ strategies, watchlist }: { strategies: Strate
         <N href="/dashboard/settings" icon={<Settings />} label="Settings" c={collapsed} active={pathname === "/dashboard/settings"} />
       </div>
     </aside>
+    </>
   );
 }
 

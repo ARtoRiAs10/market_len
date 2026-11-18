@@ -75,8 +75,8 @@ export function CommandPalette() {
         className="flex items-center gap-2 rounded-md border bg-secondary/50 px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
       >
         <Search className="h-3.5 w-3.5" />
-        <span>Search…</span>
-        <kbd className="ml-2 rounded bg-background px-1.5 py-0.5 font-mono text-[10px] border">⌘K</kbd>
+        <span className="hidden sm:inline">Search…</span>
+        <kbd className="ml-2 hidden rounded bg-background px-1.5 py-0.5 font-mono text-[10px] border sm:inline">⌘K</kbd>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

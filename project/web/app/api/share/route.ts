@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getAppUrl } from "@/lib/env";
 import { z } from "zod";
 
 export async function POST(req: NextRequest) {
@@ -21,5 +22,5 @@ export async function POST(req: NextRequest) {
     create: { runId: run.id, createdBy: session.user.id },
     update: {},
   });
-  return NextResponse.json({ shareId: shared.id, url: `${process.env.NEXTAUTH_URL}/share/${shared.id}` });
+  return NextResponse.json({ shareId: shared.id, url: `${getAppUrl()}/share/${shared.id}` });
 }

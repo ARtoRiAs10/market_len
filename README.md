@@ -49,6 +49,11 @@ long-running Python host. Full walkthrough — database, environment variables,
 Stripe webhooks, custom domain — in
 [`project/web/docs/DEPLOYMENT.md`](project/web/docs/DEPLOYMENT.md).
 
+**Vercel quick start:** import the repository, then set **Root Directory** to
+`project/web`. That directory contains the `package.json`, `vercel.json`, and
+`next.config.js`; the repository root deliberately has no `package.json`.
+Without the Root Directory setting Vercel reports that no framework was found.
+
 ---
 
 ## Development
@@ -61,6 +66,9 @@ cp .env.example .env          # fill in DATABASE_URL, NEXTAUTH_SECRET, …
 npx prisma db push
 npm run db:seed               # users, companies, price bars, strategies, a demo portfolio
 npm run dev
+
+# test admin only (idempotent): admin@marketlens.dev / Admin1234
+npm run db:admin
 
 # quant engine smoke test (no database needed)
 npm run smoke

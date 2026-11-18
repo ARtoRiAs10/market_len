@@ -59,6 +59,10 @@ set:
 The root directory **must** be `project/web` — the repository root has no
 `package.json`, so Vercel cannot detect the framework otherwise.
 
+`project/web/vercel.json` pins the Next.js framework, uses `npm ci`, and gives
+the API routes a 60-second function budget. The build script runs
+`prisma generate && next build`.
+
 `postinstall: prisma generate` runs automatically, so the Prisma client is
 always in sync with the schema.
 
@@ -66,9 +70,7 @@ always in sync with the schema.
 
 ## 3. Environment variables
 
-Add these in **Project → Settings → Environment Variables** (mark the
-`NEXT_PUBLIC_*` ones for *all* environments — they are inlined at build time,
-so changing them later requires a redeploy).
+Add these in **Project → Settings → Environment Variables**.
 
 ### Required
 
@@ -76,20 +78,23 @@ so changing them later requires a redeploy).
 |---|---|
 | `DATABASE_URL` | Neon pooled URL |
 | `DIRECT_URL` | Neon direct URL |
-| `NEXTAUTH_URL` | `https://your-app.vercel.app` (or your custom domain) |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
-| `STRIPE_SECRET_KEY` | `sk_live_…` (or `sk_test_…`) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_…` |
-| `STRIPE_WEBHOOK_SECRET` | from `stripe listen` or the Stripe dashboard |
-| `STRIPE_PRICE_ID_PRO_MONTHLY` | Stripe price ID |
-| `STRIPE_PRICE_ID_PRO_YEARLY` | Stripe price ID |
+
+`NEXTAUTH_URL` is optional on Vercel: the app automatically uses Vercel's
+`VERCEL_URL` when it is not set. Set it if you use a custom domain.
 
 ### Optional
 
 | Variable | Notes |
 |---|---|
-| `STRIPE_PRICE_ID_ENTERPRISE_MONTHLY` | Enterprise tier price |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` (or your custom domain) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth login |
+| `STRIPE_SECRET_KEY` | `sk_live_…` (or `sk_test_…`) — billing |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_…` |
+| `STRIPE_WEBHOOK_SECRET` | from `stripe listen` or the Stripe dashboard |
+| `STRIPE_PRICE_ID_PRO_MONTHLY` | Stripe price ID |
+| `STRIPE_PRICE_ID_PRO_YEARLY` | Stripe price ID |
+| `STRIPE_PRICE_ID_ENTERPRISE_MONTHLY` | Enterprise tier price |
 | `OPENROUTER_API_KEY` | AI Analyst (200+ models) |
 | `ANTHROPIC_API_KEY` | alternative AI provider |
 | `RESEND_API_KEY` / `EMAIL_FROM` | weekly digest email |
@@ -97,7 +102,11 @@ so changing them later requires a redeploy).
 | `ALPHA_VANTAGE_API_KEY` / `FMP_API_KEY` | needed for the live providers |
 | `ETL_SERVICE_URL` / `ETL_SERVICE_API_KEY` | only if you deploy the FastAPI service (below) |
 
-`lib/env.ts` validates the whole set at runtime and prints exactly which
+**Stripe is optional.** If you leave the Stripe variables blank, the rest of
+the app runs normally and the billing endpoints return `503` with a clear
+message instead of crashing. You can add Stripe later and redeploy.
+
+`lib/env.ts` validates the required set lazily and prints exactly which
 variables are missing, so a misconfiguration shows up immediately in the
 Vercel function logs.
 
@@ -117,6 +126,17 @@ Vercel function logs.
    vercel env pull .env.production
    npx tsx prisma/seed.ts        # demo users, companies, price bars, portfolio
    ```
+
+   To create only the test admin login (no demo data), run:
+
+   ```bash
+   npm run db:admin
+   ```
+
+   Defaults: `admin@marketlens.dev` / `Admin1234` (role `ADMIN`, PRO plan).
+   Override with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME`
+   and `SEED_ADMIN_PLAN`. The script resets the password on every run, so it
+   is safe to re-run after a fresh database deploy.
 4. **Custom domain** — Project → Settings → Domains → Add
    `marketlens.example.com`; update `NEXTAUTH_URL` to match and redeploy.
 
@@ -166,4 +186,5 @@ npm run smoke             # quant engine sanity check (no DB needed)
 | Auth redirect loops | `NEXTAUTH_URL` must match the deployed origin exactly, including `https://` and no trailing slash. |
 | `Invalid environment variables` in the logs | `lib/env.ts` lists the missing keys — add them and redeploy. |
 | Build timeout | The build takes ~1–2 min (`prisma generate` + `next build`); on the Hobby plan, upgrade to Pro for a larger build budget. |
-| AI Analyst returns 502 | `OPENROUTER_API_KEY` is missing (the route returns a clear 502 when it is not set). |
+| `AI Analyst returns 502` | `OPENROUTER_API_KEY` is missing (the route returns a clear 502 when it is not set). |
+| `Build fails in next/font` | Fonts are now self-hosted from `public/fonts`; if you added a Google Font, remove it or vendor the `.woff2` files. |

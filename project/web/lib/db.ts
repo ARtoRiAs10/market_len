@@ -19,10 +19,21 @@ function createPrismaClient(): PrismaClient {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
   }
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaNeon(pool);
+
+  // Neon's serverless driver speaks Neon's WebSocket protocol. Use it for
+  // Neon URLs (Vercel production), but fall back to the normal TCP Prisma
+  // client for local Postgres / other providers so `npm run db:*` works.
+  const isNeon = /neon\.(tech|dev)/i.test(connectionString) || process.env.USE_NEON_ADAPTER === "1";
+  if (isNeon) {
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaNeon(pool);
+    return new PrismaClient({
+      adapter,
+      log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    });
+  }
+
   return new PrismaClient({
-    adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { stripe, STRIPE_PRICE_IDS } from "@/lib/stripe";
+import { getAppUrl } from "@/lib/env";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
@@ -17,7 +18,14 @@ export async function POST(req: NextRequest) {
   const parsed = checkoutSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ error: "Billing is not configured on this deployment." }, { status: 503 });
+  }
+
   const priceId = STRIPE_PRICE_IDS[parsed.data.priceId];
+  if (!priceId) {
+    return NextResponse.json({ error: "Stripe price is not configured for this plan." }, { status: 503 });
+  }
 
   let sub = await prisma.subscription.findUnique({ where: { userId: session.user.id } });
 
@@ -39,8 +47,8 @@ export async function POST(req: NextRequest) {
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${process.env.NEXTAUTH_URL}/dashboard/billing?success=true`,
-    cancel_url: `${process.env.NEXTAUTH_URL}/dashboard/billing?canceled=true`,
+    success_url: `${getAppUrl()}/dashboard/billing?success=true`,
+    cancel_url: `${getAppUrl()}/dashboard/billing?canceled=true`,
     subscription_data: { metadata: { userId: session.user.id } },
     allow_promotion_codes: true,
   });

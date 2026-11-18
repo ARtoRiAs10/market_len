@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getAppUrl } from "@/lib/env";
 import crypto from "crypto";
 import { z } from "zod";
 
@@ -19,6 +20,6 @@ export async function POST(req: NextRequest, { params }: { params: { teamId: str
   if (count >= 25) return NextResponse.json({ error: "Max 25 members per team." }, { status: 403 });
   const token = crypto.randomBytes(24).toString("base64url");
   const invite = await prisma.teamInvite.create({ data: { teamId: params.teamId, email: parsed.data.email, role: parsed.data.role, token, expiresAt: new Date(Date.now() + 7*24*60*60*1000) } });
-  const inviteUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000") + "/invite/" + token;
+  const inviteUrl = getAppUrl() + "/invite/" + token;
   return NextResponse.json({ invite, inviteUrl });
 }

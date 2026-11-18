@@ -6,18 +6,19 @@ const envSchema = z.object({
   DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
 
   // Auth
-  NEXTAUTH_URL: z.string().url(),
+  // Optional: NextAuth falls back to VERCEL_URL on Vercel and localhost locally.
+  NEXTAUTH_URL: z.string().url().optional(),
   NEXTAUTH_SECRET: z.string().min(1, "NEXTAUTH_SECRET is required"),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-  // Stripe
-  STRIPE_SECRET_KEY: z.string().min(1, "STRIPE_SECRET_KEY is required"),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1, "STRIPE_WEBHOOK_SECRET is required"),
-  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().min(1),
-  STRIPE_PRICE_ID_PRO_YEARLY: z.string().min(1),
+  // Stripe (optional: the app runs without billing; billing routes return 503)
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_YEARLY: z.string().optional(),
   STRIPE_PRICE_ID_ENTERPRISE_MONTHLY: z.string().optional(),
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 
   // Email
   RESEND_API_KEY: z.string().optional(),
@@ -52,4 +53,19 @@ export function getEnv(): Env {
   }
   cached = (parsed.success ? parsed.data : process.env) as Env;
   return cached;
+}
+
+/**
+ * Public base URL of the deployment.
+ *
+ * Prefers NEXTAUTH_URL, then Vercel's VERCEL_URL (set automatically on every
+ * Vercel deployment), then localhost. This lets the app run on Vercel without
+ * having to duplicate NEXTAUTH_URL in every environment.
+ */
+export function getAppUrl(): string {
+  const explicit = process.env.NEXTAUTH_URL?.replace(/\/+$/, "");
+  if (explicit) return explicit;
+  const vercelUrl = process.env.VERCEL_URL?.replace(/\/+$/, "");
+  if (vercelUrl) return `https://${vercelUrl}`;
+  return "http://localhost:3000";
 }

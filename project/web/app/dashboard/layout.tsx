@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { listStrategies } from "@/lib/strategies/registry";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
+import { DashboardShellProvider } from "@/components/dashboard/shell-context";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -23,18 +24,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const strategies = listStrategies();
 
   return (
-    <div className="flex min-h-screen">
-      <DashboardSidebar
-        strategies={strategies.map((s) => ({ slug: s.slug, name: s.name, category: s.category, icon: s.icon }))}
-        watchlist={watchlist.map((w) => ({ ticker: w.company.ticker, name: w.company.name }))}
-      />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <DashboardTopbar
-          user={{ name: session.user.name, email: session.user.email, image: session.user.image }}
-          plan={subscription?.plan ?? "FREE"}
+    <DashboardShellProvider>
+      <div className="flex min-h-screen">
+        <DashboardSidebar
+          strategies={strategies.map((s) => ({ slug: s.slug, name: s.name, category: s.category, icon: s.icon }))}
+          watchlist={watchlist.map((w) => ({ ticker: w.company.ticker, name: w.company.name }))}
         />
-        <main className="flex-1 bg-secondary/30 p-6">{children}</main>
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <DashboardTopbar
+            user={{ name: session.user.name, email: session.user.email, image: session.user.image }}
+            plan={subscription?.plan ?? "FREE"}
+          />
+          <main className="flex-1 bg-secondary/30 p-4 sm:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </DashboardShellProvider>
   );
 }

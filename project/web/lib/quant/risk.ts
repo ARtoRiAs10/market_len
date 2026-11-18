@@ -344,7 +344,6 @@ export function riskContributions(
     for (let j = 0; j < n; j++) totalVar += weights[i] * weights[j] * covariance[i][j];
   }
   const totalVol = Math.sqrt(Math.max(totalVar, 0));
-  const totalAbsRisk = out.length === 0 ? 0 : 0; // placeholder, computed below
 
   for (let i = 0; i < n; i++) {
     let covWithPortfolio = 0;
@@ -361,7 +360,6 @@ export function riskContributions(
   }
 
   const sumComponent = out.reduce((a, c) => a + c.componentRisk, 0) || 1;
-  void totalAbsRisk;
   return out.map((c) => ({ ...c, percentOfRisk: (c.componentRisk / sumComponent) * 100 }));
 }
 

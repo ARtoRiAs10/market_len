@@ -2,6 +2,9 @@
   "name": "marketlens-web",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -12,6 +15,7 @@
     "db:deploy": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:admin": "tsx prisma/ensure-admin.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

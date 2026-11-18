@@ -13,11 +13,8 @@
  *   - A demo portfolio for the admin user
  *   - Sample alert + analyst note for admin
  */
-import { PrismaClient } from "@prisma/client";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
 import bcrypt from "bcryptjs";
-import ws from "ws";
+import { prisma } from "../lib/db";
 import {
   getSeedCompanyList,
   generateMockCompanyProfile,
@@ -25,23 +22,12 @@ import {
   generateMockDailyBars,
 } from "../lib/mock-data";
 
-// Neon's serverless driver needs a WebSocket implementation outside the
-// edge/browser runtime.
-if (typeof WebSocket === "undefined") {
-  neonConfig.webSocketConstructor = ws;
-}
-
-function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is not set");
-  const pool = new Pool({ connectionString });
-  return new PrismaClient({ adapter: new PrismaNeon(pool) });
-}
-
-const prisma = createPrismaClient();
-
 async function main() {
   console.log("🌱  Seeding MarketLens database…\n");
+
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL || "admin@marketlens.dev").toLowerCase().trim();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "Admin1234";
+  const adminName = process.env.SEED_ADMIN_NAME || "Demo Admin";
 
   // ── 1. Plan limits ────────────────────────────────────────────────────────
   const planData = [
@@ -55,17 +41,22 @@ async function main() {
   console.log("  ✓ Plan limits");
 
   // ── 2. Users ──────────────────────────────────────────────────────────────
-  const adminHash = await bcrypt.hash("Admin1234", 12);
+  const adminHash = await bcrypt.hash(adminPassword, 12);
   const demoHash  = await bcrypt.hash("Demo1234", 12);
 
   const admin = await prisma.user.upsert({
-    where: { email: "admin@marketlens.dev" },
+    where: { email: adminEmail },
     create: {
-      email: "admin@marketlens.dev", name: "Demo Admin",
+      email: adminEmail, name: adminName,
       passwordHash: adminHash, role: "ADMIN", emailVerified: new Date(),
       subscription: { create: { plan: "PRO", status: "ACTIVE" } },
     },
-    update: {},
+    update: { name: adminName, passwordHash: adminHash, role: "ADMIN" },
+  });
+  await prisma.subscription.upsert({
+    where: { userId: admin.id },
+    create: { userId: admin.id, plan: "PRO", status: "ACTIVE" },
+    update: { plan: "PRO", status: "ACTIVE" },
   });
 
   const demo = await prisma.user.upsert({
@@ -77,7 +68,7 @@ async function main() {
     },
     update: {},
   });
-  console.log("  ✓ Users (admin@marketlens.dev/Admin1234 + demo@marketlens.dev/Demo1234)");
+  console.log(`  ✓ Users (${adminEmail}/${adminPassword} + demo@marketlens.dev/Demo1234)`);
 
   // ── 3. Seed companies ─────────────────────────────────────────────────────
   const seedList = getSeedCompanyList();
@@ -316,7 +307,8 @@ async function main() {
   console.log("  ✓ Demo portfolio (Core Growth)");
 
   console.log("\n✅  Seed complete!\n");
-  console.log("  Admin:  admin@marketlens.dev  / Admin1234  (PRO plan)");
+  console.log(`  Admin:  ${admin.email}  / ${adminPassword}  (ADMIN, PRO plan)`);
+  console.log(`  userId: ${admin.id}`);
   console.log("  Demo:   demo@marketlens.dev   / Demo1234   (FREE plan)\n");
 }
 
